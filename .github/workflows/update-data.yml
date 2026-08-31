@@ -1,0 +1,29 @@
+name: update-data
+# 一次ソースを毎日取り込み、GeoJSON を更新してコミットする（0円運用）。
+# 「直近分しか返さない」ソース（ひぐまっぷ・県警TSV・青森くまログ等）は
+# ETL 側が前回結果と統合するため、この定期実行が履歴の蓄積そのものになる。
+on:
+  schedule:
+    - cron: '0 21 * * *' # 毎日 06:00 JST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node scripts/fetch-data.mjs
+      - name: commit if changed
+        run: |
+          git config user.name "kmap-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add public/data/sightings.geojson public/data/meta.json
+          git diff --cached --quiet || git commit -m "chore: refresh sighting data"
+          git push

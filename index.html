@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐻</text></svg>" />
+    <title>クママップ | 全国クマ出没情報マップ</title>
+    <meta name="description" content="自治体の公開データを集約した、クマ出没情報の地図。都道府県・期間で絞り込め、リスクの高い地域を2kmメッシュで表示します。" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <h1>🐻 <span data-i18n="title">クママップ</span></h1>
+        <span id="count" class="count">読み込み中…</span>
+        <select id="lang" aria-label="Language">
+          <option value="ja" selected>日本語</option>
+          <option value="en">English</option>
+        </select>
+      </header>
+
+      <aside id="panel">
+        <div class="field">
+          <label for="view" data-i18n="view">表示</label>
+          <select id="view">
+            <option value="points" data-i18n="view_points" selected>出没地点（点）</option>
+            <option value="risk" data-i18n="view_risk">リスクマップ（2kmメッシュ）</option>
+            <option value="pref" data-i18n="view_pref">県別集計（色分け）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="pref" data-i18n="pref">都道府県</label>
+          <select id="pref"><option value="" data-i18n="all">すべて</option></select>
+        </div>
+        <div class="field">
+          <label for="period" data-i18n="period">期間</label>
+          <select id="period">
+            <option value="30" data-i18n="d30">直近30日</option>
+            <option value="90" data-i18n="d90">直近90日</option>
+            <option value="365" data-i18n="d365">直近1年</option>
+            <option value="0" data-i18n="all" selected>すべて</option>
+          </select>
+        </div>
+        <label class="check">
+          <input type="checkbox" id="habitat" />
+          <span data-i18n="habitat">クマの生息分布を表示</span>
+        </label>
+
+        <div id="legend-pref" hidden>
+          <div class="legend-title" data-i18n="lg_pref">出没件数（県別・現在の絞り込み）</div>
+          <div class="legend-row"><i style="background:#8c2d04"></i>15,000+</div>
+          <div class="legend-row"><i style="background:#d94801"></i>5,000–15,000</div>
+          <div class="legend-row"><i style="background:#f16913"></i>2,000–5,000</div>
+          <div class="legend-row"><i style="background:#fdae6b"></i>500–2,000</div>
+          <div class="legend-row"><i style="background:#fdd0a2"></i>1–500</div>
+          <div class="legend-row"><i style="background:#eeeae4"></i><span data-i18n="lg_none">データ未整備</span></div>
+        </div>
+
+        <div id="legend-risk" hidden>
+          <div class="legend-title" data-i18n="lg_risk">リスク（2kmメッシュの出没密度）</div>
+          <div class="legend-row"><i style="background:#7f0000"></i><span data-i18n="r5">非常に高い</span> (50+)</div>
+          <div class="legend-row"><i style="background:#d7301f"></i><span data-i18n="r4">高い</span> (20–50)</div>
+          <div class="legend-row"><i style="background:#fc8d59"></i><span data-i18n="r3">中</span> (8–20)</div>
+          <div class="legend-row"><i style="background:#fdcc8a"></i><span data-i18n="r2">低い</span> (3–8)</div>
+          <div class="legend-row"><i style="background:#fef0d9"></i><span data-i18n="r1">わずか</span> (1–3)</div>
+        </div>
+
+        <details id="stats-wrap">
+          <summary data-i18n="stats">統計を見る</summary>
+          <div id="stats"></div>
+        </details>
+
+        <p class="hint" data-i18n="hint">
+          出典: 各自治体のオープンデータ。集計は当サイト取込データに基づく値で、
+          全都道府県を網羅するものではありません。
+        </p>
+        <p class="updated" id="updated"></p>
+      </aside>
+
+      <main id="map"></main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
