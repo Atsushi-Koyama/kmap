@@ -248,6 +248,30 @@ const SOURCES = [
   kmlSrc('長野県', '原村クマ出没(R8)', '1PuemOr6Cw73KM_Y7Uz_0DWLrCA86iRw'),
   kmlSrc('長野県', '原村クマ出没(R7)', '1V-4TVY3RxrVgluh9rd732a4KB_on2ww'),
 
+  // 北信・東信の市町村（いずれも年度別レイヤを含む Google マイマップ）
+  kmlSrc('長野県', '上田市クマ出没', '13klTV8oVYZKWCrOBv6en0w2UKuYWSOo'),
+  kmlSrc('長野県', '小諸市クマ出没', '13vWc3VaUH8badv8Ny1IIpt4MvAs471A'),
+  kmlSrc('長野県', '坂城町クマ出没', '1dwsWR22QMc-bt0JAVI8G-7H4uI0n0Fc'),
+  kmlSrc('長野県', '御代田町クマ出没', '1o2X7QV6sdfQ0lJVHNIovrBGo7wSzg8U'),
+  {
+    // 軽井沢町の独自WebGIS。約1ヶ月のローリングなのでアーカイブ統合で蓄積する
+    name: '軽井沢町サル・クマ出没', pref: '長野県', type: 'htmljson',
+    url: 'http://www.thread.ne.jp/kta2/sarukuma.html',
+    extract: (html) => {
+      const m = html.match(/APP\.data\.information\s*=\s*(\[[\s\S]*?\])\s*;/);
+      if (!m) return [];
+      try { return JSON.parse(m[1]); } catch { return []; }
+    },
+    map: (r, i) => ({
+      id: `karuizawa-${r.id ?? i}`, pref: '長野県', city: '軽井沢町',
+      date: parseDate(r.lastupdate),
+      // title は「クマ目撃」「サル目撃」。isBear がクマ以外を弾く
+      species: r.title || '', kind: '目撃',
+      note: (r.text || '').toString().slice(0, 120),
+      lat: num(r.latitude), lon: num(r.longitude),
+    }),
+  },
+
   // 栃木県警「ルリちゃんパトロールまっぷ」の動物TSV（gzip）。県全域・当日更新。
   // ※ .tsv は404で、.tsv.gz のみ配信されている
   {
