@@ -6,7 +6,7 @@
 - データ: Node製ETL → `public/data/sightings.geojson`（静的配信）
 - ホスティング: 静的サイトなので Cloudflare Pages / GitHub Pages 等に**0円**で公開可能
 
-現在のデータ源（一次ソース）: **29都道府県・計 91,623件**（重複除去後）。取込方式は9種（CSV / ArcGIS FeatureServer / Google My Maps KML / Shapefile / JSON API / 静的GeoJSON / HTML埋め込みJSON / gzip TSV / TSV）。
+現在のデータ源（一次ソース）: **30都道府県・計 101,701件**（重複除去後）。取込方式は9種（CSV / ArcGIS FeatureServer / Google My Maps KML / Shapefile / JSON API / 静的GeoJSON / HTML埋め込みJSON / gzip TSV / TSV）。
 
 | 都道府県 | 取得方式 | 件数 |
 |---|---|---|
