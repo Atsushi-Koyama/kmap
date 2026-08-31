@@ -229,6 +229,25 @@ const SOURCES = [
   // Referer とブラウザUAが無いと403になる
   iidaLayer('R8', 0), iidaLayer('R7', 2),
 
+  // 諏訪地域の市町村（県警TSVは直近12ヶ月のみなので過年度分を補う）
+  {
+    name: '岡谷市クマ出没', pref: '長野県', type: 'arcgis', pageSize: 1000,
+    url: 'https://services1.arcgis.com/4GMefrLcjv8z16wh/arcgis/rest/services/クマ出没マップ/FeatureServer/0',
+    map: (r, i) => ({
+      id: `okaya-${r.OBJECTID ?? r.objectid ?? i}`, pref: '長野県', city: '岡谷市',
+      date: parseDate(r['日付'] || r['年度']), species: r['鳥獣'] || 'ツキノワグマ',
+      kind: r['分類'] || '目撃', note: [r['場所'], r['状況']].filter(Boolean).join(' '),
+    }),
+  },
+  kmlSrc('長野県', '茅野市クマ目撃(R8)', '1nMKi0qK-fG6MVSGZHX82mzDLmXmZJSI'),
+  kmlSrc('長野県', '茅野市クマ目撃(R7)', '1lWEbYwo8Rjnu5k8bzud5TOgpzgWiRaw'),
+  kmlSrc('長野県', '茅野市クマ目撃(R6)', '1A1QqRnefVvLj5UbmaQBvlZ69TadIXZE'),
+  kmlSrc('長野県', '茅野市クマ目撃(R5)', '1ZRtRySw-apeqjSuH19xeaQxyo1k1leQ'),
+  kmlSrc('長野県', '富士見町クマ出没(R8)', '1FeFnrW_VegLPAKUKQ17eb-DDVYEXZq4'),
+  kmlSrc('長野県', '富士見町クマ出没(R7)', '1vWM8FSdhp16WKcrNfCYJ2KGJpz8bwfw'),
+  kmlSrc('長野県', '原村クマ出没(R8)', '1PuemOr6Cw73KM_Y7Uz_0DWLrCA86iRw'),
+  kmlSrc('長野県', '原村クマ出没(R7)', '1V-4TVY3RxrVgluh9rd732a4KB_on2ww'),
+
   // 栃木県警「ルリちゃんパトロールまっぷ」の動物TSV（gzip）。県全域・当日更新。
   // ※ .tsv は404で、.tsv.gz のみ配信されている
   {

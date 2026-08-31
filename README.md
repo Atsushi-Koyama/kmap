@@ -6,7 +6,7 @@
 - データ: Node製ETL → `public/data/sightings.geojson`（静的配信）
 - ホスティング: 静的サイトなので Cloudflare Pages / GitHub Pages 等に**0円**で公開可能
 
-現在のデータ源（一次ソース）: **29都道府県・計 91,009件**（重複除去後）。取込方式は9種（CSV / ArcGIS FeatureServer / Google My Maps KML / Shapefile / JSON API / 静的GeoJSON / HTML埋め込みJSON / gzip TSV / TSV）。
+現在のデータ源（一次ソース）: **29都道府県・計 91,175件**（重複除去後）。取込方式は9種（CSV / ArcGIS FeatureServer / Google My Maps KML / Shapefile / JSON API / 静的GeoJSON / HTML埋め込みJSON / gzip TSV / TSV）。
 
 | 都道府県 | 取得方式 | 件数 |
 |---|---|---|
@@ -22,7 +22,7 @@
 | 石川県 | CKAN CSV（R7＋R1-R6分析マップ） | 2,878 |
 | 群馬県 | ArcGIS（Survey123） | 1,737 |
 | 鳥取県 | 静的GeoJSON（geolonia・H30〜R7） | 1,553 |
-| 長野県 | 県警TSV（県全域）＋飯田市GeoCloud | 1,319 |
+| 長野県 | 県警TSV（県全域）＋飯田市GeoCloud＋岡谷/茅野/富士見/原村 | 1,485 |
 | 山口県 | CKAN CSV（2023-2026） | 1,233 |
 | 栃木県 | 県警TSV.gz（県全域）＋那須塩原/那須/矢板 My Maps | 985 |
 | 兵庫県 | JSON API（県警安全安心マップ） | 451 |
