@@ -5,6 +5,4 @@ dist/
 scratchpad/
 .svelte-kit/
 static/api/
-static/data/
-static/font/
 .wrangler/

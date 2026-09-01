@@ -3,6 +3,7 @@
 // 全ページで30MBを読ませないための前処理で、SEO用の地域ページの元にもなる。
 // 出力:
 //   static/api/index.json              都道府県・市区町村の一覧と件数（ページ生成用）
+//   static/api/points.json             全国地図用の全点 [経度, 緯度, 年月]
 //   static/api/pref/<slug>.json        都道府県ページのデータ
 //   static/api/city/<pref>-<slug>.json 市区町村ページのデータ
 // 実行: node scripts/build-pages.mjs
@@ -130,9 +131,19 @@ async function main() {
   }
 
   await writeFile(join(OUT, 'index.json'), JSON.stringify(index));
+
+  // 全国地図は 30MB の GeoJSON をそのまま読ませない。座標＋年月だけの配列にして
+  // クライアントで FeatureCollection を組み立てる（Cloudflare Pages の 25MiB 制限対策でもある）。
+  const allPoints = [];
+  for (const recs of byPref.values()) {
+    for (const r of recs) allPoints.push([r.x, r.y, r.d ? r.d.slice(0, 7) : null]);
+  }
+  await writeFile(join(OUT, 'points.json'), JSON.stringify(allPoints));
+
   const cityTotal = index.prefs.reduce((a, p) => a + p.cities.length, 0);
   console.log(`都道府県ページ: ${index.prefs.length}`);
   console.log(`市区町村ページ: ${cityTotal}（${CITY_MIN}件以上）`);
+  console.log(`全国地図の点: ${allPoints.length.toLocaleString()}`);
   console.log(`→ ${OUT}`);
 }
 
