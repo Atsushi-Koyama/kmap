@@ -610,24 +610,53 @@ const pick = (row, part) => {
 };
 
 const toHalf = (s) => String(s).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-const isoymd = (y, mo, da) => {
-  const d = new Date(Date.UTC(+y, +mo - 1, +da));
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+// 日付のみの場合は 'YYYY-MM-DD'、時刻がある場合は JST オフセット付き ISO を返す。
+// 日付だけのものを 00:00 として扱うと、表示時に「9:00」という存在しない時刻になるため、
+// 「時刻が分かるか」を文字列の長さで区別できる形にしておく。
+const pad = (n) => String(n).padStart(2, '0');
+const ymd = (y, mo, da) => {
+  const Y = +y, M = +mo, D = +da;
+  if (!(Y >= 1900 && Y <= 2100 && M >= 1 && M <= 12 && D >= 1 && D <= 31)) return null;
+  return `${Y}-${pad(M)}-${pad(D)}`;
 };
+const withTime = (date, hh, mm, ss) =>
+  date && hh != null ? `${date}T${pad(hh)}:${pad(mm || 0)}:${pad(ss || 0)}+09:00` : date;
 
-// あらゆる日付表記（epoch/和暦R7.8.5/令和8年1月4日/ISO・スラッシュ・ドット・自由文）→ ISO
+// あらゆる日付表記（epoch/和暦R7.8.5/令和8年1月4日/ISO・スラッシュ・ドット・自由文）→
+// 'YYYY-MM-DD'（時刻不明）または JST付きISO（時刻あり）
 function parseDate(v) {
   if (v == null || v === '') return null;
+  // epoch ミリ秒。ArcGIS等の日付型はここに来る
   if (typeof v === 'number' || /^\d{12,}$/.test(String(v).trim())) {
-    const d = new Date(Number(v)); return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    const d = new Date(Number(v));
+    if (Number.isNaN(d.getTime())) return null;
+    // JSTでの日付・時刻に直す
+    const j = new Date(d.getTime() + 9 * 3600 * 1000);
+    const date = ymd(j.getUTCFullYear(), j.getUTCMonth() + 1, j.getUTCDate());
+    const h = j.getUTCHours(), mi = j.getUTCMinutes(), se = j.getUTCSeconds();
+    // 0時0分ちょうどは「日付のみ」を意味することが多いので時刻なし扱い
+    return h === 0 && mi === 0 && se === 0 ? date : withTime(date, h, mi, se);
   }
+
   const s = toHalf(String(v).trim());
+  // 文字列中の時刻（HH:MM[:SS]）を拾っておく
+  const tm = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  const t = tm ? [tm[1], tm[2], tm[3]] : null;
+  const fin = (date) => (t ? withTime(date, t[0], t[1], t[2]) : date);
+
   let m = s.match(/^([RHSM])\.?\s*(\d{1,2})[.\-/年]\s*(\d{1,2})[.\-/月]\s*(\d{1,2})/);
-  if (m) { const base = { R: 2018, H: 1988, S: 1925, M: 1867 }[m[1]]; return isoymd(base + +m[2], m[3], m[4]); }
+  if (m) {
+    const base = { R: 2018, H: 1988, S: 1925, M: 1867 }[m[1]];
+    return fin(ymd(base + +m[2], m[3], m[4]));
+  }
   m = s.match(/(令和|平成|昭和)\s*(\d{1,2}|元)年\s*(\d{1,2})月\s*(\d{1,2})日/);
-  if (m) { const base = { 令和: 2018, 平成: 1988, 昭和: 1925 }[m[1]]; const y = m[2] === '元' ? 1 : +m[2]; return isoymd(base + y, m[3], m[4]); }
+  if (m) {
+    const base = { 令和: 2018, 平成: 1988, 昭和: 1925 }[m[1]];
+    const y = m[2] === '元' ? 1 : +m[2];
+    return fin(ymd(base + y, m[3], m[4]));
+  }
   m = s.match(/(20\d{2})[.\-/年]\s*(\d{1,2})[.\-/月]\s*(\d{1,2})/);
-  if (m) return isoymd(m[1], m[2], m[3]);
+  if (m) return fin(ymd(m[1], m[2], m[3]));
   return null;
 }
 

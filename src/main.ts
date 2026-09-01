@@ -43,7 +43,7 @@ const I18N: Record<string, Dict> = {
     dated: '日付あり', nodata: 'データなし',
     showing: '{n} 件を表示', updated: 'データ更新: {d}', cases: '{n} 件',
     hint: '出典: 各自治体のオープンデータ。集計は当サイト取込データに基づく値で、全都道府県を網羅するものではありません。',
-    nodate: '日時不明', risk_cell: 'このメッシュの出没', loading: '読み込み中…',
+    nodate: '日時不明', timeunknown: '時刻不明', risk_cell: 'このメッシュの出没', loading: '読み込み中…',
     err: 'データ取得に失敗',
   },
   en: {
@@ -59,7 +59,7 @@ const I18N: Record<string, Dict> = {
     dated: 'with dates', nodata: 'No data',
     showing: '{n} sightings', updated: 'Data updated: {d}', cases: '{n} sightings',
     hint: 'Source: open data published by local governments. Figures are based on data collected by this site and do not cover all prefectures.',
-    nodate: 'Date unknown', risk_cell: 'Sightings in this cell', loading: 'Loading…',
+    nodate: 'Date unknown', timeunknown: 'time unknown', risk_cell: 'Sightings in this cell', loading: 'Loading…',
     err: 'Failed to load data',
   },
 };
@@ -194,7 +194,12 @@ function renderStats(feats: Sighting[], counts: Record<string, number>) {
   let dated = 0;
   for (const f of feats) {
     const p = f.properties;
-    if (p.date) { byMonth[new Date(p.date).getMonth()]++; dated++; }
+    if (p.date) {
+      // 'YYYY-MM-DD' はUTC解釈されるため、月の判定もUTCで揃える
+      const d = new Date(p.date);
+      byMonth[p.date.length === 10 ? d.getUTCMonth() : d.getMonth()]++;
+      dated++;
+    }
     const city = (p.city || '').trim();
     if (city) byCity[city] = (byCity[city] || 0) + 1;
   }
@@ -348,9 +353,14 @@ async function init() {
   map.on('click', 'points', (e) => {
     const p = (e.features![0].properties!) as Sighting['properties'];
     const geo = (e.features![0].geometry as GeoJSON.Point).coordinates.slice() as [number, number];
-    const date = p.date
-      ? new Date(p.date).toLocaleString(lang === 'ja' ? 'ja-JP' : 'en-US')
-      : t('nodate');
+    // 'YYYY-MM-DD'（10文字）は時刻不明。日付だけを出す。
+    // 時刻がある場合のみ JST 付きISOが入っているので時刻まで表示する。
+    const loc = lang === 'ja' ? 'ja-JP' : 'en-US';
+    const date = !p.date
+      ? t('nodate')
+      : p.date.length === 10
+        ? `${new Date(p.date).toLocaleDateString(loc, { timeZone: 'UTC' })}（${t('timeunknown')}）`
+        : new Date(p.date).toLocaleString(loc);
     new maplibregl.Popup({ maxWidth: '280px' })
       .setLngLat(geo)
       .setHTML(
