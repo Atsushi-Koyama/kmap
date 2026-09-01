@@ -4,5 +4,5 @@
 export const prerender = true;
 export async function load({ fetch }) {
   const idx = await (await fetch('/api/index.json')).json();
-  return { total: idx.total as number };
+  return { total: idx.total as number, generatedAt: idx.generatedAt as string };
 }

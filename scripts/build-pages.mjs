@@ -81,6 +81,7 @@ async function main() {
     const [lon, lat] = f.geometry.coordinates;
     const rec = {
       d: p.date || null,
+      pref: p.pref || '',
       c: cityOf(p),
       k: p.kind || '',
       s: p.species || '',
@@ -133,12 +134,18 @@ async function main() {
   await writeFile(join(OUT, 'index.json'), JSON.stringify(index));
 
   // 全国地図用。元の sightings.geojson は 30MB あり Cloudflare Pages の 25MiB 制限を超えるので、
-  // 描画に使わない properties を全て落とした GeoJSON を出す。
+  // ポップアップに必要な properties だけを短いキーで残した GeoJSON を出す。
   // MapLibre には「オブジェクト」ではなく「URL」で渡すこと。URL ならワーカー側で
   // fetch・パース・クラスタリングが走り、10万点でもメインスレッドが固まらない。
   const allPoints = [];
   for (const recs of byPref.values()) {
-    for (const r of recs) allPoints.push(`{"type":"Feature","geometry":{"type":"Point","coordinates":[${r.x},${r.y}]}}`);
+    for (const r of recs) {
+      allPoints.push(JSON.stringify({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [r.x, r.y] },
+        properties: { d: r.d, p: r.pref, c: r.c, n: r.n.slice(0, 100) },
+      }));
+    }
   }
   await writeFile(join(OUT, 'points.geojson'),
     `{"type":"FeatureCollection","features":[${allPoints.join(',')}]}`);

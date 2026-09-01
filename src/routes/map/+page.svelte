@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   let { data } = $props();
-  const total = data.total;
+  const total = $derived(data.total);
+  const generatedAt = $derived(data.generatedAt);
+  const updated = $derived(new Date(generatedAt).toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  }));
   let el: HTMLDivElement;
   // 枠内に出す読み込み表示。地図の描画が始まったら消すだけの飾りで、
   // ここに機能を載せない（描画イベントが来ない環境で地図ごと止まるため）。
@@ -13,16 +18,39 @@
   // WebGL が使えない環境では地図を出せない。その場合だけ一覧への導線を出す。
   let fallback = $state(false);
 
-  // maplibre は WebGL 必須で、無い環境では new Map() が例外を投げる。
-  // 先に判定して、生のエラーJSONではなく普通の日本語を出す。
+  // WebGL が使えるかの目安。ただしこれで描画可否を決めてはいけない。
+  // 分離canvasでの getContext は、GPUがソフトウェア描画に落ちている場合や
+  // 他タブがWebGLコンテキストを使い切っている場合に false を返すことがあり、
+  // 実際には maplibre が問題なく動く環境まで弾いてしまう。
+  // ここは「失敗したときの理由の切り分け」にだけ使う。
   function webglAvailable() {
     try {
       const c = document.createElement('canvas');
-      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+      // 性能が出ない環境でも描画自体は可能なので、この判定では拒否しない
+      const opts = { failIfMajorPerformanceCaveat: false } as WebGLContextAttributes;
+      const gl = (c.getContext('webgl2', opts) ||
+        c.getContext('webgl', opts)) as WebGLRenderingContext | null;
+      if (!gl) return false;
+      // 判定用のコンテキストを残すと同時接続数の上限を圧迫するので即解放する
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return true;
     } catch { return false; }
   }
 
   const NO_WEBGL = 'このブラウザでは地図を表示できません（WebGLが無効です）。';
+
+  const esc = (value: unknown) => String(value ?? '')
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+
+  function formatDate(value: unknown) {
+    const date = String(value ?? '');
+    if (!date) return '日時不明';
+    if (date.length === 10) {
+      return `${new Date(date).toLocaleDateString('ja-JP', { timeZone: 'UTC' })}（時刻不明）`;
+    }
+    return new Date(date).toLocaleString('ja-JP');
+  }
 
   onMount(async () => {
     // ここで throw すると status が初期値のまま固まり、画面上は
@@ -46,12 +74,10 @@
 
   async function boot() {
     mark('boot開始');
-    if (!webglAvailable()) {
-      mark('WebGL利用不可');
-      status = NO_WEBGL;
-      fallback = true;
-      return;
-    }
+    // 事前判定で弾かない。描画できるかの最終的な答えは maplibre 自身しか持たず、
+    // 自前の判定で先回りすると、実際には動く環境で地図を出せなくなる。
+    // 失敗したら onMount 側の catch が理由を出す。
+    if (!webglAvailable()) mark('WebGL判定は false（それでも初期化を試す）');
     const maplibregl = (await import('maplibre-gl')).default;
     mark('maplibre読み込み完了');
     await import('maplibre-gl/dist/maplibre-gl.css');
@@ -77,7 +103,8 @@
           // data は URL で渡すこと。オブジェクトで渡すと 10万件の転送で
           // メインスレッドが数秒固まる。URL ならワーカー側で完結する。
           s: {
-            type: 'geojson', data: '/api/points.geojson',
+            // データ更新時はURLも変え、ブラウザ/CDNの古いGeoJSONを確実に避ける。
+            type: 'geojson', data: `/api/points.geojson?v=${encodeURIComponent(generatedAt)}`,
             cluster: true, clusterRadius: 50, clusterMaxZoom: 12,
           },
         },
@@ -104,9 +131,37 @@
       },
       center: [137.5, 37.4],
       zoom: 4.7,
+      // GPUが使えずソフトウェア描画になる環境でも表示を優先する。
+      // 既定のままだと「性能が出ない」という理由だけで初期化が失敗しうる。
+      failIfMajorPerformanceCaveat: false,
     });
     mark('Map生成完了');
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.on('click', 'clusters', async (e) => {
+      const feature = map.queryRenderedFeatures(e.point, { layers: ['clusters'] })[0];
+      if (!feature || feature.geometry.type !== 'Point') return;
+      const source = map.getSource('s') as InstanceType<typeof maplibregl.GeoJSONSource>;
+      const zoom = await source.getClusterExpansionZoom(feature.properties?.cluster_id);
+      map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom });
+    });
+    map.on('click', 'points', (e) => {
+      const feature = e.features?.[0];
+      if (!feature || feature.geometry.type !== 'Point') return;
+      const p = feature.properties ?? {};
+      const place = [p.p, p.c].filter(Boolean).map(esc).join(' ');
+      new maplibregl.Popup({ maxWidth: '300px' })
+        .setLngLat(feature.geometry.coordinates as [number, number])
+        .setHTML(
+          `<div class="popup-date">${esc(formatDate(p.d))}</div>` +
+          (place ? `<div class="popup-place">${place}</div>` : '') +
+          (p.n ? `<div class="popup-note">${esc(p.n)}</div>` : ''),
+        )
+        .addTo(map);
+    });
+    for (const layer of ['clusters', 'points']) {
+      map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; });
+    }
     map.on('error', (e) => {
       const msg = (e as any)?.error?.message ?? String((e as any)?.error ?? e);
       status = `地図の読み込みでエラー: ${msg}`;
@@ -125,7 +180,7 @@
 </svelte:head>
 
 <h1>全国クマ出没マップ</h1>
-<p class="c">{total.toLocaleString()} 件</p>
+<p class="c">{total.toLocaleString()} 件・データ更新: {updated}</p>
 <div class="wrap">
   <div class="map" bind:this={el}></div>
   {#if status}
@@ -150,4 +205,7 @@
     pointer-events: none; /* 読み込み中に地図の操作を奪わない */
   }
   .status a { pointer-events: auto; }
+  :global(.popup-date) { font-weight: 700; margin-bottom: 4px; }
+  :global(.popup-place) { color: #5a4f44; margin-bottom: 4px; }
+  :global(.popup-note) { line-height: 1.55; }
 </style>
