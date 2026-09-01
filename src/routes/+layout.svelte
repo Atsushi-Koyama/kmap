@@ -1,6 +1,16 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { absUrl, SITE_NAME } from '$lib/site';
   let { children } = $props();
+  const canonical = $derived(absUrl(page.url.pathname));
 </script>
+
+<svelte:head>
+  <link rel="canonical" href={canonical} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:site_name" content={SITE_NAME} />
+  <meta property="og:locale" content="ja_JP" />
+</svelte:head>
 
 <header>
   <a class="brand" href="/">🐻 クママップ</a>

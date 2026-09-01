@@ -1,10 +1,8 @@
 import type { Index } from '$lib/data';
+import { SITE_URL } from '$lib/site';
 import idxJson from '../../../static/api/index.json';
 
 export const prerender = true;
-
-// 公開ドメインが決まったら差し替える
-const BASE = 'https://kmap.pages.dev';
 
 export function GET() {
   const idx = idxJson as unknown as Index;
@@ -17,7 +15,7 @@ export function GET() {
   ];
   const body = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.map((u) => `  <url><loc>${BASE}${u.loc}</loc><priority>${u.pri}</priority></url>`).join('\n')}
+${urls.map((u) => `  <url><loc>${SITE_URL}${u.loc}</loc><priority>${u.pri}</priority></url>`).join('\n')}
 </urlset>`;
   return new Response(body, { headers: { 'Content-Type': 'application/xml' } });
 }

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://kmap.pages.dev/sitemap.xml
+Sitemap: https://kmap-5tu.pages.dev/sitemap.xml
