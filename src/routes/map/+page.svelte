@@ -3,12 +3,18 @@
   let { data } = $props();
   const total = data.total;
   let el: HTMLDivElement;
-  // 地図が使える状態になるまで枠内に出す表示。件数はSSGのHTMLに焼かれているので待たせない。
+  // 枠内に出す読み込み表示。地図の描画が始まったら消すだけの飾りで、
+  // ここに機能を載せない（描画イベントが来ない環境で地図ごと止まるため）。
   let status = $state('地図を読み込み中…');
 
   onMount(async () => {
     const maplibregl = (await import('maplibre-gl')).default;
     await import('maplibre-gl/dist/maplibre-gl.css');
+
+    // ソースとレイヤは map.on('load') を待たず、最初のスタイルに全部書く。
+    // load は「スタイル読み込み＋最初の描画完了」で初めて発火するので、
+    // バックグラウンドタブなど描画が始まらない状況では永久に来ない。
+    // そこにデータ投入を置くと、地図が白いまま何も出ない状態になる。
     const map = new maplibregl.Map({
       container: el,
       style: {
@@ -22,45 +28,40 @@
             attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>',
             maxzoom: 18,
           },
+          // data は URL で渡すこと。オブジェクトで渡すと 10万件の転送で
+          // メインスレッドが数秒固まる。URL ならワーカー側で完結する。
+          s: {
+            type: 'geojson', data: '/api/points.geojson',
+            cluster: true, clusterRadius: 50, clusterMaxZoom: 12,
+          },
         },
-        layers: [{ id: 'gsi', type: 'raster', source: 'gsi' }],
+        layers: [
+          { id: 'gsi', type: 'raster', source: 'gsi' },
+          {
+            id: 'clusters', type: 'circle', source: 's', filter: ['has', 'point_count'],
+            paint: {
+              'circle-color': ['step', ['get', 'point_count'], '#f1a340', 50, '#e08214', 200, '#b35806'],
+              'circle-radius': ['step', ['get', 'point_count'], 16, 50, 22, 200, 30],
+              'circle-opacity': 0.85,
+            },
+          },
+          {
+            id: 'cluster-count', type: 'symbol', source: 's', filter: ['has', 'point_count'],
+            layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-font': ['Noto Sans Regular'], 'text-size': 12 },
+            paint: { 'text-color': '#fff' },
+          },
+          {
+            id: 'points', type: 'circle', source: 's', filter: ['!', ['has', 'point_count']],
+            paint: { 'circle-color': '#b35806', 'circle-radius': 6, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff' },
+          },
+        ],
       },
       center: [137.5, 37.4],
       zoom: 4.7,
     });
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.on('error', (e) => { status = '地図を読み込めませんでした'; console.error(e?.error ?? e); });
-    map.on('load', () => {
-      status = '出没地点を読み込み中…';
-
-      // data は「オブジェクト」ではなく「URL」を渡すこと。URL ならワーカー側で
-      // fetch・パース・クラスタリングが走る。オブジェクトを渡すと 10万件の
-      // 転送がメインスレッドを数秒ブロックし、地図が真っ白のまま固まる。
-      map.addSource('s', {
-        type: 'geojson', data: '/api/points.geojson',
-        cluster: true, clusterRadius: 50, clusterMaxZoom: 12,
-      });
-      map.addLayer({
-        id: 'clusters', type: 'circle', source: 's', filter: ['has', 'point_count'],
-        paint: {
-          'circle-color': ['step', ['get', 'point_count'], '#f1a340', 50, '#e08214', 200, '#b35806'],
-          'circle-radius': ['step', ['get', 'point_count'], 16, 50, 22, 200, 30],
-          'circle-opacity': 0.85,
-        },
-      });
-      map.addLayer({
-        id: 'cluster-count', type: 'symbol', source: 's', filter: ['has', 'point_count'],
-        layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-font': ['Noto Sans Regular'], 'text-size': 12 },
-        paint: { 'text-color': '#fff' },
-      });
-      map.addLayer({
-        id: 'points', type: 'circle', source: 's', filter: ['!', ['has', 'point_count']],
-        paint: { 'circle-color': '#b35806', 'circle-radius': 6, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff' },
-      });
-      map.on('sourcedata', (e) => {
-        if (e.sourceId === 's' && map.isSourceLoaded('s')) status = '';
-      });
-    });
+    map.once('idle', () => { status = ''; });
   });
 </script>
 
