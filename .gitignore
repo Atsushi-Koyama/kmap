@@ -7,3 +7,4 @@ scratchpad/
 static/api/
 static/data/
 static/font/
+.wrangler/
