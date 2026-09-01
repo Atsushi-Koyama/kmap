@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  let { data } = $props();
+  const total = data.total;
   let el: HTMLDivElement;
-  let count = $state('読み込み中…');
+  // 地図が使える状態になるまで枠内に出す表示。件数はSSGのHTMLに焼かれているので待たせない。
+  let status = $state('地図を読み込み中…');
 
   onMount(async () => {
     const maplibregl = (await import('maplibre-gl')).default;
@@ -26,12 +29,9 @@
       zoom: 4.7,
     });
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.on('load', async () => {
-      // 件数は 17KB の index.json から先に出す。10万点の読み込みを待たせない。
-      fetch('/api/index.json')
-        .then((r) => r.json())
-        .then((i) => { count = `${i.total.toLocaleString()} 件`; })
-        .catch(() => { count = ''; });
+    map.on('error', (e) => { status = '地図を読み込めませんでした'; console.error(e?.error ?? e); });
+    map.on('load', () => {
+      status = '出没地点を読み込み中…';
 
       // data は「オブジェクト」ではなく「URL」を渡すこと。URL ならワーカー側で
       // fetch・パース・クラスタリングが走る。オブジェクトを渡すと 10万件の
@@ -57,6 +57,9 @@
         id: 'points', type: 'circle', source: 's', filter: ['!', ['has', 'point_count']],
         paint: { 'circle-color': '#b35806', 'circle-radius': 6, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff' },
       });
+      map.on('sourcedata', (e) => {
+        if (e.sourceId === 's' && map.isSourceLoaded('s')) status = '';
+      });
     });
   });
 </script>
@@ -67,12 +70,21 @@
 </svelte:head>
 
 <h1>全国クマ出没マップ</h1>
-<p class="c">{count}</p>
-<div class="map" bind:this={el}></div>
+<p class="c">{total.toLocaleString()} 件</p>
+<div class="wrap">
+  <div class="map" bind:this={el}></div>
+  {#if status}<p class="status">{status}</p>{/if}
+</div>
 <p><a href="/pref/">都道府県別の一覧を見る →</a></p>
 
 <style>
   h1 { font-size: 22px; margin: 6px 0 8px; }
   .c { font-size: 13px; color: #7a6c5d; margin: 0 0 10px; }
+  .wrap { position: relative; }
   .map { width: 100%; height: 70vh; border-radius: 10px; overflow: hidden; border: 1px solid #e6ddd1; }
+  .status {
+    position: absolute; inset: 0; margin: 0; display: flex;
+    align-items: center; justify-content: center;
+    font-size: 14px; color: #7a6c5d; pointer-events: none;
+  }
 </style>

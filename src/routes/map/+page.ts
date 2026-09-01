@@ -1,4 +1,8 @@
-// 地図は全点(30MB)を読むためクライアント側で描画する。
-// 検索流入は地域ページが担うので、この1枚はSSGのシェルで足りる。
+// 地図本体（10万点）はクライアントで描くが、シェルと件数はSSGで先に出す。
+// ssr=false にすると maplibre-gl（gzip 212KB）の読み込みと初期化が終わるまで
+// 見出しすら描画されず、「読み込み中…」と空の枠だけの画面が数秒続いてしまう。
 export const prerender = true;
-export const ssr = false;
+export async function load({ fetch }) {
+  const idx = await (await fetch('/api/index.json')).json();
+  return { total: idx.total as number };
+}
