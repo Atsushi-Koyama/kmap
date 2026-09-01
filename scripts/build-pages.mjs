@@ -137,21 +137,36 @@ async function main() {
   // ポップアップに必要な properties だけを短いキーで残した GeoJSON を出す。
   // MapLibre には「オブジェクト」ではなく「URL」で渡すこと。URL ならワーカー側で
   // fetch・パース・クラスタリングが走り、10万点でもメインスレッドが固まらない。
+  // 地図用の全点。フィルタに必要な最小限だけ持たせる。
+  // 都道府県は文字列だと10万件で数MB増えるので、index.prefs の並び順の番号で持つ。
+  // 日付は 'YYYY-MM' に丸める（期間フィルタと月別集計はこれで足りる）。
+  // 状況の本文はクリック時に別途取りに行けばよく、地図データに載せない。
+  const prefIdx = new Map(index.prefs.map((p, i) => [p.pref, i]));
   const allPoints = [];
-  for (const recs of byPref.values()) {
+  for (const [pref, recs] of byPref.entries()) {
+    const pi = prefIdx.get(pref);
+    if (pi === undefined) continue;
     for (const r of recs) {
-      allPoints.push(JSON.stringify({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [r.x, r.y] },
-        properties: { d: r.d, p: r.pref, c: r.c, n: r.n.slice(0, 100) },
-      }));
+      const ym = r.d ? r.d.slice(0, 7) : '';
+      allPoints.push(
+        `{"type":"Feature","geometry":{"type":"Point","coordinates":[${r.x},${r.y}]},"properties":{"p":${pi}${ym ? `,"d":"${ym}"` : ''}}}`,
+      );
     }
   }
   await writeFile(join(OUT, 'points.geojson'),
     `{"type":"FeatureCollection","features":[${allPoints.join(',')}]}`);
 
+  // 地図の件数表示用。県 × 年月の件数だけを持つ小さな表。
+  // 10万点を数え直す代わりにこれを引く（描画済みタイルからは数えられない）。
+  const monthCounts = {};
+  for (const [pref, recs] of byPref.entries()) {
+    const m = {};
+    for (const r of recs) if (r.d) { const ym = r.d.slice(0, 7); m[ym] = (m[ym] || 0) + 1; }
+    monthCounts[pref] = m;
+  }
+  await writeFile(join(OUT, 'month-counts.json'), JSON.stringify(monthCounts));
+
   // WebGLが使えない環境向けの代替地図（canvas 2D）で県境を描くために配る。
-  // 40KB程度なので通常表示の妨げにはならない。
   const prefGeo = await readFile(join(__dirname, '..', 'public', 'data', 'prefectures.geojson'), 'utf8');
   await writeFile(join(OUT, 'prefectures.geojson'), prefGeo);
 
