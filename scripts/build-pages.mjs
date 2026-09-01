@@ -150,6 +150,11 @@ async function main() {
   await writeFile(join(OUT, 'points.geojson'),
     `{"type":"FeatureCollection","features":[${allPoints.join(',')}]}`);
 
+  // WebGLが使えない環境向けの代替地図（canvas 2D）で県境を描くために配る。
+  // 40KB程度なので通常表示の妨げにはならない。
+  const prefGeo = await readFile(join(__dirname, '..', 'public', 'data', 'prefectures.geojson'), 'utf8');
+  await writeFile(join(OUT, 'prefectures.geojson'), prefGeo);
+
   const cityTotal = index.prefs.reduce((a, p) => a + p.cities.length, 0);
   console.log(`都道府県ページ: ${index.prefs.length}`);
   console.log(`市区町村ページ: ${cityTotal}（${CITY_MIN}件以上）`);

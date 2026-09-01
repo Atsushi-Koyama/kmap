@@ -17,6 +17,8 @@
   const mark = (m: string) => { log.push(`${Math.round(performance.now())}ms ${m}`); };
   // WebGL が使えない環境では地図を出せない。その場合だけ一覧への導線を出す。
   let fallback = $state(false);
+  // WebGLが無い場合に使う代替地図（canvas 2D）
+  let canvasEl: HTMLCanvasElement;
 
   // WebGL が使えるかの目安。ただしこれで描画可否を決めてはいけない。
   // 分離canvasでの getContext は、GPUがソフトウェア描画に落ちている場合や
@@ -64,6 +66,7 @@
       if (!webglAvailable() || /webgl/i.test(raw)) {
         status = NO_WEBGL;
         fallback = true;
+        void showFallbackMap();
       } else {
         status = `地図を初期化できませんでした: ${raw.slice(0, 120)}`;
       }
@@ -71,6 +74,23 @@
     }
     (window as any).__kmap = { log, status: () => status };
   });
+
+  // WebGLが使えない環境でも地図そのものは出す。リンクだけ出して終わりにすると
+  // 地図サイトとして成立しないため、簡易版を描く。
+  async function showFallbackMap() {
+    try {
+      const { renderFallbackMap } = await import('$lib/fallbackMap');
+      // canvas が DOM に載るのを待つ
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      if (canvasEl) {
+        await renderFallbackMap(canvasEl);
+        mark('代替地図の描画完了');
+        status = '簡易表示です（このブラウザではWebGLが使えないため）。';
+      }
+    } catch (e) {
+      console.error('[kmap] 代替地図の描画失敗', e);
+    }
+  }
 
   async function boot() {
     mark('boot開始');
@@ -182,9 +202,12 @@
 <h1>全国クマ出没マップ</h1>
 <p class="c">{total.toLocaleString()} 件・データ更新: {updated}</p>
 <div class="wrap">
-  <div class="map" bind:this={el}></div>
+  <div class="map" bind:this={el} hidden={fallback}></div>
+  {#if fallback}
+    <canvas class="map fb" bind:this={canvasEl}></canvas>
+  {/if}
   {#if status}
-    <p class="status">
+    <p class="status" class:corner={fallback}>
       {status}
       {#if fallback}<a href="/pref/">都道府県別の一覧で見る →</a>{/if}
     </p>
@@ -197,6 +220,13 @@
   .c { font-size: 13px; color: #7a6c5d; margin: 0 0 10px; }
   .wrap { position: relative; }
   .map { width: 100%; height: 70vh; border-radius: 10px; overflow: hidden; border: 1px solid #e6ddd1; }
+  .map.fb { display: block; background: #dfe9f3; }
+  /* 代替地図では地図の上に文字が被らないよう下端に寄せる */
+  .status.corner {
+    top: auto; bottom: 10px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,.92); padding: 6px 14px; border-radius: 8px;
+    font-size: 12px; white-space: nowrap;
+  }
   .status {
     position: absolute; inset: 0; margin: 0; display: flex;
     flex-direction: column; gap: 8px; padding: 0 16px;
