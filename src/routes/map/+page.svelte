@@ -27,20 +27,19 @@
     });
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
     map.on('load', async () => {
-      // 元の sightings.geojson は 30MB あり Cloudflare Pages の 25MiB 制限を超えるため配信しない。
-      // build-pages.mjs が出す [経度, 緯度, 年月] の配列から組み立てる。
-      const pts: [number, number, string | null][] =
-        await (await fetch('/api/points.json')).json();
-      const fc = {
-        type: 'FeatureCollection' as const,
-        features: pts.map(([x, y, m]) => ({
-          type: 'Feature' as const,
-          geometry: { type: 'Point' as const, coordinates: [x, y] },
-          properties: { m },
-        })),
-      };
-      count = `${pts.length.toLocaleString()} 件`;
-      map.addSource('s', { type: 'geojson', data: fc, cluster: true, clusterRadius: 50, clusterMaxZoom: 12 });
+      // 件数は 17KB の index.json から先に出す。10万点の読み込みを待たせない。
+      fetch('/api/index.json')
+        .then((r) => r.json())
+        .then((i) => { count = `${i.total.toLocaleString()} 件`; })
+        .catch(() => { count = ''; });
+
+      // data は「オブジェクト」ではなく「URL」を渡すこと。URL ならワーカー側で
+      // fetch・パース・クラスタリングが走る。オブジェクトを渡すと 10万件の
+      // 転送がメインスレッドを数秒ブロックし、地図が真っ白のまま固まる。
+      map.addSource('s', {
+        type: 'geojson', data: '/api/points.geojson',
+        cluster: true, clusterRadius: 50, clusterMaxZoom: 12,
+      });
       map.addLayer({
         id: 'clusters', type: 'circle', source: 's', filter: ['has', 'point_count'],
         paint: {

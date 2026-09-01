@@ -3,7 +3,7 @@
 // 全ページで30MBを読ませないための前処理で、SEO用の地域ページの元にもなる。
 // 出力:
 //   static/api/index.json              都道府県・市区町村の一覧と件数（ページ生成用）
-//   static/api/points.json             全国地図用の全点 [経度, 緯度, 年月]
+//   static/api/points.geojson          全国地図用の全点（座標のみのGeoJSON）
 //   static/api/pref/<slug>.json        都道府県ページのデータ
 //   static/api/city/<pref>-<slug>.json 市区町村ページのデータ
 // 実行: node scripts/build-pages.mjs
@@ -132,13 +132,16 @@ async function main() {
 
   await writeFile(join(OUT, 'index.json'), JSON.stringify(index));
 
-  // 全国地図は 30MB の GeoJSON をそのまま読ませない。座標＋年月だけの配列にして
-  // クライアントで FeatureCollection を組み立てる（Cloudflare Pages の 25MiB 制限対策でもある）。
+  // 全国地図用。元の sightings.geojson は 30MB あり Cloudflare Pages の 25MiB 制限を超えるので、
+  // 描画に使わない properties を全て落とした GeoJSON を出す。
+  // MapLibre には「オブジェクト」ではなく「URL」で渡すこと。URL ならワーカー側で
+  // fetch・パース・クラスタリングが走り、10万点でもメインスレッドが固まらない。
   const allPoints = [];
   for (const recs of byPref.values()) {
-    for (const r of recs) allPoints.push([r.x, r.y, r.d ? r.d.slice(0, 7) : null]);
+    for (const r of recs) allPoints.push(`{"type":"Feature","geometry":{"type":"Point","coordinates":[${r.x},${r.y}]}}`);
   }
-  await writeFile(join(OUT, 'points.json'), JSON.stringify(allPoints));
+  await writeFile(join(OUT, 'points.geojson'),
+    `{"type":"FeatureCollection","features":[${allPoints.join(',')}]}`);
 
   const cityTotal = index.prefs.reduce((a, p) => a + p.cities.length, 0);
   console.log(`都道府県ページ: ${index.prefs.length}`);
