@@ -10,6 +10,19 @@
   // 原因調査用。画面に出ない失敗を追えるようにする。
   const log: string[] = [];
   const mark = (m: string) => { log.push(`${Math.round(performance.now())}ms ${m}`); };
+  // WebGL が使えない環境では地図を出せない。その場合だけ一覧への導線を出す。
+  let fallback = $state(false);
+
+  // maplibre は WebGL 必須で、無い環境では new Map() が例外を投げる。
+  // 先に判定して、生のエラーJSONではなく普通の日本語を出す。
+  function webglAvailable() {
+    try {
+      const c = document.createElement('canvas');
+      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch { return false; }
+  }
+
+  const NO_WEBGL = 'このブラウザでは地図を表示できません（WebGLが無効です）。';
 
   onMount(async () => {
     // ここで throw すると status が初期値のまま固まり、画面上は
@@ -17,7 +30,15 @@
     try {
       await boot();
     } catch (e) {
-      status = `地図を初期化できませんでした: ${e instanceof Error ? e.message : String(e)}`;
+      // WebGL 生成失敗は maplibre が巨大なJSON文字列を message に入れてくる。
+      // そのまま出すと画面が壊れるので、原因はコンソールだけに残す。
+      const raw = e instanceof Error ? e.message : String(e);
+      if (!webglAvailable() || /webgl/i.test(raw)) {
+        status = NO_WEBGL;
+        fallback = true;
+      } else {
+        status = `地図を初期化できませんでした: ${raw.slice(0, 120)}`;
+      }
       console.error('[kmap] 初期化失敗', e);
     }
     (window as any).__kmap = { log, status: () => status };
@@ -25,6 +46,12 @@
 
   async function boot() {
     mark('boot開始');
+    if (!webglAvailable()) {
+      mark('WebGL利用不可');
+      status = NO_WEBGL;
+      fallback = true;
+      return;
+    }
     const maplibregl = (await import('maplibre-gl')).default;
     mark('maplibre読み込み完了');
     await import('maplibre-gl/dist/maplibre-gl.css');
@@ -101,7 +128,12 @@
 <p class="c">{total.toLocaleString()} 件</p>
 <div class="wrap">
   <div class="map" bind:this={el}></div>
-  {#if status}<p class="status">{status}</p>{/if}
+  {#if status}
+    <p class="status">
+      {status}
+      {#if fallback}<a href="/pref/">都道府県別の一覧で見る →</a>{/if}
+    </p>
+  {/if}
 </div>
 <p><a href="/pref/">都道府県別の一覧を見る →</a></p>
 
@@ -112,7 +144,10 @@
   .map { width: 100%; height: 70vh; border-radius: 10px; overflow: hidden; border: 1px solid #e6ddd1; }
   .status {
     position: absolute; inset: 0; margin: 0; display: flex;
-    align-items: center; justify-content: center;
-    font-size: 14px; color: #7a6c5d; pointer-events: none;
+    flex-direction: column; gap: 8px; padding: 0 16px;
+    align-items: center; justify-content: center; text-align: center;
+    font-size: 14px; color: #7a6c5d;
+    pointer-events: none; /* 読み込み中に地図の操作を奪わない */
   }
+  .status a { pointer-events: auto; }
 </style>
