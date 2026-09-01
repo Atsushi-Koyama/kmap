@@ -7,9 +7,28 @@
   // ここに機能を載せない（描画イベントが来ない環境で地図ごと止まるため）。
   let status = $state('地図を読み込み中…');
 
+  // 原因調査用。画面に出ない失敗を追えるようにする。
+  const log: string[] = [];
+  const mark = (m: string) => { log.push(`${Math.round(performance.now())}ms ${m}`); };
+
   onMount(async () => {
+    // ここで throw すると status が初期値のまま固まり、画面上は
+    // 「読み込み中」と区別が付かない。必ず理由を表示に出す。
+    try {
+      await boot();
+    } catch (e) {
+      status = `地図を初期化できませんでした: ${e instanceof Error ? e.message : String(e)}`;
+      console.error('[kmap] 初期化失敗', e);
+    }
+    (window as any).__kmap = { log, status: () => status };
+  });
+
+  async function boot() {
+    mark('boot開始');
     const maplibregl = (await import('maplibre-gl')).default;
+    mark('maplibre読み込み完了');
     await import('maplibre-gl/dist/maplibre-gl.css');
+    mark('CSS読み込み完了');
 
     // ソースとレイヤは map.on('load') を待たず、最初のスタイルに全部書く。
     // load は「スタイル読み込み＋最初の描画完了」で初めて発火するので、
@@ -59,10 +78,18 @@
       center: [137.5, 37.4],
       zoom: 4.7,
     });
+    mark('Map生成完了');
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
-    map.on('error', (e) => { status = '地図を読み込めませんでした'; console.error(e?.error ?? e); });
-    map.once('idle', () => { status = ''; });
-  });
+    map.on('error', (e) => {
+      const msg = (e as any)?.error?.message ?? String((e as any)?.error ?? e);
+      status = `地図の読み込みでエラー: ${msg}`;
+      console.error('[kmap] map error', e);
+    });
+    map.on('styledata', () => mark('styledata'));
+    map.on('load', () => mark('load'));
+    map.once('idle', () => { mark('idle'); status = ''; });
+    (window as any).__kmap = { map, log, status: () => status };
+  }
 </script>
 
 <svelte:head>
