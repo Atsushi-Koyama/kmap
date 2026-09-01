@@ -3,3 +3,7 @@ dist/
 *.log
 .DS_Store
 scratchpad/
+.svelte-kit/
+static/api/
+static/data/
+static/font/
